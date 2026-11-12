@@ -1,0 +1,479 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  STUDENT
+  LECTURER
+  ADMINISTRATOR
+}
+
+enum AccountVerificationStatus {
+  UNCLAIMED
+  PENDING_VERIFICATION
+  ACTIVE
+  REJECTED
+}
+
+enum SemesterTerm {
+  FIRST
+  SECOND
+  SUMMER
+}
+
+enum RegistrationStatus {
+  PENDING
+  REGISTERED
+  DROPPED
+}
+
+enum ResultStatus {
+  DRAFT
+  SUBMITTED
+  CHANGES_REQUESTED
+  APPROVED
+  PUBLISHED
+}
+
+enum UploadStatus {
+  UPLOADED
+  VALIDATED
+  REJECTED
+  PROCESSED
+}
+
+enum AcademicEventStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
+  DEAD_LETTER
+}
+
+enum AuditAction {
+  CREATED
+  UPDATED
+  SUBMITTED
+  APPROVED
+  PUBLISHED
+  REOPENED
+}
+
+model User {
+  id            String                 @id @default(cuid())
+  firebaseUid   String?                @unique
+  email         String                 @unique
+  firstName     String
+  lastName      String
+  role          UserRole
+  accountStatus AccountVerificationStatus @default(UNCLAIMED)
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  student       Student?
+  lecturer      Lecturer?
+  notifications AcademicNotification[]
+  audits        ResultAuditHistory[]   @relation("AuditActor")
+  accountClaims AccountClaim[]         @relation("ClaimApplicant")
+  claimDecisions AccountClaim[]        @relation("ClaimReviewer")
+
+  @@index([role])
+  @@map("users")
+}
+
+model AccountClaim {
+  id              String                    @id @default(cuid())
+  firebaseUid     String                    @unique
+  requestedRole   UserRole
+  officialUserId  String                    @unique
+  suppliedId      String
+  status          AccountVerificationStatus @default(PENDING_VERIFICATION)
+  decisionReason  String?
+  reviewedById    String?
+  reviewedAt      DateTime?
+  createdAt       DateTime                  @default(now())
+  officialUser    User                      @relation("ClaimApplicant", fields: [officialUserId], references: [id], onDelete: Restrict)
+  reviewedBy      User?                     @relation("ClaimReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@map("account_claims")
+}
+
+model Student {
+  id                  String         @id @default(cuid())
+  userId              String         @unique
+  matriculationNumber String         @unique
+  programmeId         String
+  entryYear           Int
+  officialLevel       Int            @default(100)
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  user                User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  programme           Programme      @relation(fields: [programmeId], references: [id], onDelete: Restrict)
+  registrations       Registration[]
+
+  @@index([programmeId])
+  @@map("students")
+}
+
+model Lecturer {
+  id            String               @id @default(cuid())
+  userId        String               @unique
+  departmentId  String
+  staffNumber   String               @unique
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  user          User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
+  department    Department           @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  assignments   LecturerAssignment[]
+  uploadBatches ResultUploadBatch[]
+
+  @@index([departmentId])
+  @@map("lecturers")
+}
+
+model Faculty {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  code        String       @unique
+  departments Department[]
+
+  @@map("faculties")
+}
+
+model Department {
+  id         String      @id @default(cuid())
+  facultyId  String
+  name       String
+  code       String      @unique
+  faculty    Faculty     @relation(fields: [facultyId], references: [id], onDelete: Restrict)
+  programmes Programme[]
+  lecturers  Lecturer[]
+  courses    Course[]
+
+  @@unique([facultyId, name])
+  @@index([facultyId])
+  @@map("departments")
+}
+
+model Programme {
+  id              String                       @id @default(cuid())
+  departmentId    String
+  name            String
+  code            String                       @unique
+  award           String
+  durationYears   Int
+  department      Department                   @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  students        Student[]
+  offerings       CourseOffering[]
+  requirements    ProgrammeCourseRequirement[]
+  gradingPolicies GradingPolicy[]
+
+  @@unique([departmentId, name])
+  @@index([departmentId])
+  @@map("programmes")
+}
+
+model AcademicSession {
+  id        String          @id @default(cuid())
+  name      String          @unique
+  startDate DateTime        @db.Date
+  endDate   DateTime        @db.Date
+  semesters Semester[]
+  policies  GradingPolicy[]
+
+  @@map("academic_sessions")
+}
+
+model Semester {
+  id                  String               @id @default(cuid())
+  sessionId           String
+  term                SemesterTerm
+  startDate           DateTime             @db.Date
+  endDate             DateTime             @db.Date
+  isCurrent           Boolean              @default(false)
+  session             AcademicSession      @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  offerings           CourseOffering[]
+  registrationPeriods RegistrationPeriod[]
+
+  @@unique([sessionId, term])
+  @@index([sessionId, isCurrent])
+  @@map("semesters")
+}
+
+model Course {
+  id            String                       @id @default(cuid())
+  departmentId  String
+  code          String                       @unique
+  title         String
+  creditUnits   Int
+  level         Int
+  department    Department                   @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  offerings     CourseOffering[]
+  prerequisites CoursePrerequisite[]         @relation("DependentCourse")
+  requiredBy    CoursePrerequisite[]         @relation("PrerequisiteCourse")
+  requirements  ProgrammeCourseRequirement[]
+
+  @@index([departmentId, level])
+  @@map("courses")
+}
+
+model CoursePrerequisite {
+  courseId             String
+  prerequisiteCourseId String
+  course               Course @relation("DependentCourse", fields: [courseId], references: [id], onDelete: Cascade)
+  prerequisiteCourse   Course @relation("PrerequisiteCourse", fields: [prerequisiteCourseId], references: [id], onDelete: Restrict)
+
+  @@id([courseId, prerequisiteCourseId])
+  @@index([prerequisiteCourseId])
+  @@map("course_prerequisites")
+}
+
+model CourseOffering {
+  id            String                @id @default(cuid())
+  courseId      String
+  semesterId    String
+  programmeId   String
+  capacity      Int
+  course        Course                @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  semester      Semester              @relation(fields: [semesterId], references: [id], onDelete: Restrict)
+  programme     Programme             @relation(fields: [programmeId], references: [id], onDelete: Restrict)
+  assignments   LecturerAssignment[]
+  schedules     ClassSchedule[]
+  registrations Registration[]
+  components    AssessmentComponent[]
+  uploads       ResultUploadBatch[]
+
+  @@unique([courseId, semesterId, programmeId])
+  @@index([semesterId, programmeId])
+  @@map("course_offerings")
+}
+
+model LecturerAssignment {
+  id               String         @id @default(cuid())
+  lecturerId       String
+  courseOfferingId String
+  isLead           Boolean        @default(false)
+  lecturer         Lecturer       @relation(fields: [lecturerId], references: [id], onDelete: Restrict)
+  courseOffering   CourseOffering @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+
+  @@unique([lecturerId, courseOfferingId])
+  @@index([courseOfferingId])
+  @@map("lecturer_assignments")
+}
+
+model ClassSchedule {
+  id               String         @id @default(cuid())
+  courseOfferingId String
+  weekday          Int
+  startTime        DateTime       @db.Time(0)
+  endTime          DateTime       @db.Time(0)
+  room             String
+  courseOffering   CourseOffering @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+
+  @@index([courseOfferingId, weekday])
+  @@map("class_schedules")
+}
+
+model RegistrationPeriod {
+  id         String   @id @default(cuid())
+  semesterId String
+  opensAt    DateTime
+  closesAt   DateTime
+  isActive   Boolean  @default(true)
+  semester   Semester @relation(fields: [semesterId], references: [id], onDelete: Cascade)
+
+  @@index([semesterId, isActive])
+  @@map("registration_periods")
+}
+
+model ProgrammeCourseRequirement {
+  programmeId         String
+  courseId            String
+  isRequired          Boolean   @default(true)
+  recommendedSemester Int?
+  programme           Programme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+  course              Course    @relation(fields: [courseId], references: [id], onDelete: Restrict)
+
+  @@id([programmeId, courseId])
+  @@map("programme_course_requirements")
+}
+
+model Registration {
+  id               String             @id @default(cuid())
+  studentId        String
+  courseOfferingId String
+  status           RegistrationStatus @default(REGISTERED)
+  registeredAt     DateTime           @default(now())
+  student          Student            @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  courseOffering   CourseOffering     @relation(fields: [courseOfferingId], references: [id], onDelete: Restrict)
+  assessmentScores AssessmentScore[]
+  result           Result?
+
+  @@unique([studentId, courseOfferingId])
+  @@index([courseOfferingId, status])
+  @@map("registrations")
+}
+
+model GradingPolicy {
+  id           String              @id @default(cuid())
+  sessionId    String
+  programmeId  String?
+  name         String
+  isDefault    Boolean             @default(false)
+  session      AcademicSession     @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  programme    Programme?          @relation(fields: [programmeId], references: [id], onDelete: Restrict)
+  scaleEntries GradingScaleEntry[]
+
+  @@unique([sessionId, programmeId, name])
+  @@index([sessionId, isDefault])
+  @@map("grading_policies")
+}
+
+model GradingScaleEntry {
+  id              String        @id @default(cuid())
+  gradingPolicyId String
+  grade           String
+  minimumScore    Decimal       @db.Decimal(5, 2)
+  maximumScore    Decimal       @db.Decimal(5, 2)
+  gradePoint      Decimal       @db.Decimal(3, 2)
+  policy          GradingPolicy @relation(fields: [gradingPolicyId], references: [id], onDelete: Cascade)
+
+  @@unique([gradingPolicyId, grade])
+  @@map("grading_scale_entries")
+}
+
+model AssessmentComponent {
+  id               String            @id @default(cuid())
+  courseOfferingId String
+  name             String
+  weightPercent    Decimal           @db.Decimal(5, 2)
+  maximumScore     Decimal           @db.Decimal(5, 2)
+  courseOffering   CourseOffering    @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+  scores           AssessmentScore[]
+
+  @@unique([courseOfferingId, name])
+  @@map("assessment_components")
+}
+
+model AssessmentScore {
+  id                    String              @id @default(cuid())
+  registrationId        String
+  assessmentComponentId String
+  score                 Decimal             @db.Decimal(5, 2)
+  recordedAt            DateTime            @default(now())
+  registration          Registration        @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  component             AssessmentComponent @relation(fields: [assessmentComponentId], references: [id], onDelete: Restrict)
+
+  @@unique([registrationId, assessmentComponentId])
+  @@index([assessmentComponentId])
+  @@map("assessment_scores")
+}
+
+model Result {
+  id             String               @id @default(cuid())
+  registrationId String               @unique
+  totalScore     Decimal?             @db.Decimal(5, 2)
+  letterGrade    String?
+  gradePoint     Decimal?             @db.Decimal(3, 2)
+  status         ResultStatus         @default(DRAFT)
+  submittedAt    DateTime?
+  publishedAt    DateTime?
+  registration   Registration         @relation(fields: [registrationId], references: [id], onDelete: Restrict)
+  audits         ResultAuditHistory[]
+
+  @@index([status, submittedAt])
+  @@map("results")
+}
+
+model ResultAuditHistory {
+  id        String      @id @default(cuid())
+  resultId  String
+  actorId   String?
+  action    AuditAction
+  details   Json?
+  createdAt DateTime    @default(now())
+  result    Result      @relation(fields: [resultId], references: [id], onDelete: Cascade)
+  actor     User?       @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([resultId, createdAt])
+  @@map("result_audit_history")
+}
+
+model ResultUploadBatch {
+  id               String              @id @default(cuid())
+  courseOfferingId String
+  lecturerId       String
+  originalFilename String
+  status           UploadStatus        @default(UPLOADED)
+  createdAt        DateTime            @default(now())
+  courseOffering   CourseOffering      @relation(fields: [courseOfferingId], references: [id], onDelete: Restrict)
+  lecturer         Lecturer            @relation(fields: [lecturerId], references: [id], onDelete: Restrict)
+  errors           ResultUploadError[]
+
+  @@index([courseOfferingId, createdAt])
+  @@map("result_upload_batches")
+}
+
+model ResultUploadError {
+  id        String            @id @default(cuid())
+  batchId   String
+  rowNumber Int
+  field     String?
+  message   String
+  rawValue  String?
+  batch     ResultUploadBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@index([batchId, rowNumber])
+  @@map("result_upload_errors")
+}
+
+model AcademicNotification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt])
+  @@map("academic_notifications")
+}
+
+model AcademicEventOutbox {
+  id                    String             @id @default(cuid())
+  eventKey              String             @unique
+  eventType             String
+  recipientFirebaseUid  String
+  title                 String
+  message               String
+  payload               Json?
+  status                AcademicEventStatus @default(PENDING)
+  attempts              Int                @default(0)
+  availableAt           DateTime           @default(now())
+  processingLeaseUntil  DateTime?
+  lastAttemptAt         DateTime?
+  processedAt           DateTime?
+  lastError             String?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  @@index([status, availableAt, createdAt])
+  @@index([status, processingLeaseUntil])
+  @@index([recipientFirebaseUid, createdAt])
+  @@map("academic_event_outbox")
+}
+
+model AcademicSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@map("academic_settings")
+}

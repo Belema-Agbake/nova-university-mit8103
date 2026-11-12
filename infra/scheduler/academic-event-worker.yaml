@@ -1,0 +1,10 @@
+# Deployment template only. Configure an authenticated HTTP invocation at a
+# reviewed worker endpoint every minute after the Cloud Run worker is deployed.
+name: nova-academic-event-worker-minute
+schedule: "* * * * *"
+timeZone: "Etc/UTC"
+httpTarget:
+  uri: REPLACE_WITH_CLOUD_RUN_WORKER_URL
+  httpMethod: POST
+  oidcToken:
+    serviceAccountEmail: nova-academic-event-scheduler@nova-university-89019.iam.gserviceaccount.com

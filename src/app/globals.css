@@ -1,0 +1,58 @@
+@import "tailwindcss";
+
+@keyframes nova-gpa-draw {
+  from { stroke-dashoffset: 2200; }
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes nova-gpa-point {
+  from { opacity: 0; transform: scale(.65); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+svg path[stroke="#2B7A83"] {
+  stroke-dasharray: 2200;
+  stroke-dashoffset: 2200;
+  animation: nova-gpa-draw 1.6s ease-out forwards;
+}
+
+svg circle[stroke="#2B7A83"] {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: nova-gpa-point .45s ease-out .7s both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  svg path[stroke="#2B7A83"] { animation: none; stroke-dashoffset: 0; }
+  svg circle[stroke="#2B7A83"] { animation: none; }
+}
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background); --color-foreground: var(--foreground);
+  --color-card: var(--card); --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover); --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary); --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary); --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted); --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent); --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive); --color-border: var(--border); --color-input: var(--input); --color-ring: var(--ring);
+  --font-sans: var(--font-inter); --font-mono: var(--font-geist-mono);
+  --radius-sm: calc(var(--radius) - 4px); --radius-md: calc(var(--radius) - 2px); --radius-lg: var(--radius); --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --background: #F6F8FB; --foreground: #142235; --card: #FFFFFF; --card-foreground: #142235;
+  --popover: #FFFFFF; --popover-foreground: #142235; --primary: #173B63; --primary-foreground: #FFFFFF;
+  --secondary: #E7F0F0; --secondary-foreground: #164A50; --muted: #F0F4F8; --muted-foreground: #53657A;
+  --accent: #D5A748; --accent-foreground: #342500; --destructive: #BA3A3A; --border: #D9E2EC; --input: #D9E2EC; --ring: #236A72;
+  --radius: 0.875rem;
+}
+* { @apply border-border; }
+html { font-family: var(--font-inter), Arial, sans-serif; }
+body { @apply bg-background text-foreground antialiased; }
+button, a, input, select { @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2; }
+::selection { background: #D5A748; color: #142235; }

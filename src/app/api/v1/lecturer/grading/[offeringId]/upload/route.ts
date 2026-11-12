@@ -1,0 +1,6 @@
+import { NextRequest, NextResponse } from "next/server";
+import * as XLSX from "xlsx";
+import { requireAuthenticatedLecturer } from "@/server/authorization/require-lecturer";
+import { apiError } from "@/server/http/api-response";
+import { uploadLecturerGrades } from "@/server/grading/lecturer-grading-service";
+export async function POST(request: NextRequest, context: { params: Promise<{ offeringId: string }> }) { try { const lecturer = await requireAuthenticatedLecturer(request); const form = await request.formData(); const file = form.get("file"); if (!(file instanceof File)) return NextResponse.json({ error: { code: "FILE_REQUIRED", message: "An Excel file is required." } }, { status: 400 }); const workbook = XLSX.read(Buffer.from(await file.arrayBuffer()), { type: "buffer", cellDates: false }); const sheet = workbook.Sheets[workbook.SheetNames[0]]; if (!sheet) return NextResponse.json({ error: { code: "FILE_EMPTY", message: "The workbook has no worksheets." } }, { status: 400 }); const rows = XLSX.utils.sheet_to_json<Record<string, string>>(sheet, { defval: "" }); const { offeringId } = await context.params; return NextResponse.json(await uploadLecturerGrades(lecturer.id, lecturer.userId, offeringId, file.name, rows)); } catch (error) { return apiError(error); } }

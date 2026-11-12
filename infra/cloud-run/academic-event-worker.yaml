@@ -1,0 +1,24 @@
+# Deployment template only; it has not been applied to Google Cloud.
+# The deployed service must use a dedicated service account with Secret Manager
+# access and Firebase Admin permissions, plus private-ranges-only VPC egress.
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: nova-academic-event-worker
+spec:
+  template:
+    spec:
+      serviceAccountName: nova-academic-event-worker@nova-university-89019.iam.gserviceaccount.com
+      containers:
+        - image: REPLACE_WITH_APPROVED_ARTIFACT_IMAGE
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: NOVA_DATABASE_URL
+                  key: latest
+      vpcAccess:
+        networkInterfaces:
+          - network: default
+            subnetwork: default
+        egress: private-ranges-only

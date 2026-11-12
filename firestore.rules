@@ -1,0 +1,38 @@
+rules_version = '2';
+service cloud.firestore {
+  // Server-generated projections only. PostgreSQL remains authoritative.
+  // users/{uid}/notifications/{eventId} and users/{uid}/activity/{eventId}
+  // contain eventId, eventType, recipientUid, title, message, isRead,
+  // createdAt, source, and optional payload/readAt fields.
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function ownsUser(userId) { return signedIn() && request.auth.uid == userId; }
+    function validEvent(data, userId) {
+      return data.keys().hasOnly(['eventId', 'eventType', 'recipientUid', 'title', 'message', 'payload', 'isRead', 'createdAt', 'source', 'readAt']) &&
+        data.keys().hasAll(['eventId', 'eventType', 'recipientUid', 'title', 'message', 'isRead', 'createdAt', 'source']) &&
+        data.eventId is string && data.eventId.size() > 0 && data.eventId.size() <= 160 &&
+        data.eventType is string && data.eventType.size() > 0 && data.eventType.size() <= 80 &&
+        data.recipientUid == userId &&
+        data.title is string && data.title.size() > 0 && data.title.size() <= 160 &&
+        data.message is string && data.message.size() > 0 && data.message.size() <= 1000 &&
+        (data.payload == null || data.payload is map) && data.isRead is bool &&
+        data.createdAt is timestamp && data.source == 'server' &&
+        (!('readAt' in data) || data.readAt is timestamp);
+    }
+    function onlyReadStateChanged() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead', 'readAt']) &&
+        request.resource.data.isRead is bool && request.resource.data.isRead == true &&
+        request.resource.data.readAt is timestamp && resource.data.isRead == false;
+    }
+    match /users/{userId}/notifications/{notificationId} {
+      allow read: if ownsUser(userId) && validEvent(resource.data, userId);
+      allow update: if ownsUser(userId) && validEvent(request.resource.data, userId) && onlyReadStateChanged();
+      allow create, delete: if false;
+    }
+    match /users/{userId}/activity/{activityId} {
+      allow read: if ownsUser(userId) && validEvent(resource.data, userId);
+      allow write: if false;
+    }
+    match /{document=**} { allow read, write: if false; }
+  }
+}

@@ -1,0 +1,94 @@
+{
+  "database": "nova_university_test",
+  "generatedAt": "2026-11-11T02:43:03.161Z",
+  "results": [
+    {
+      "name": "last available course seat",
+      "concurrency": 20,
+      "successes": 1,
+      "failures": 19,
+      "retries": 0,
+      "averageLatencyMs": 42.034,
+      "p95LatencyMs": 69.314,
+      "throughputPerSecond": 274.919,
+      "integrity": "verified"
+    },
+    {
+      "name": "duplicate registration",
+      "concurrency": 20,
+      "successes": 1,
+      "failures": 19,
+      "retries": 0,
+      "averageLatencyMs": 19.784,
+      "p95LatencyMs": 22.556,
+      "throughputPerSecond": 876.635,
+      "integrity": "verified"
+    },
+    {
+      "name": "concurrent course dropping",
+      "concurrency": 20,
+      "successes": 1,
+      "failures": 19,
+      "retries": 0,
+      "averageLatencyMs": 13.842,
+      "p95LatencyMs": 21.53,
+      "throughputPerSecond": 873.077,
+      "integrity": "verified"
+    },
+    {
+      "name": "transaction rollback",
+      "concurrency": 1,
+      "successes": 1,
+      "failures": 0,
+      "retries": 0,
+      "averageLatencyMs": 1.987,
+      "p95LatencyMs": 1.987,
+      "throughputPerSecond": 500.551,
+      "integrity": "verified"
+    },
+    {
+      "name": "row locking",
+      "concurrency": 20,
+      "successes": 20,
+      "failures": 0,
+      "retries": 0,
+      "averageLatencyMs": 26.411,
+      "p95LatencyMs": 44.045,
+      "throughputPerSecond": 437.573,
+      "integrity": "verified"
+    },
+    {
+      "name": "serializable retries",
+      "concurrency": 20,
+      "successes": 5,
+      "failures": 15,
+      "retries": 71,
+      "averageLatencyMs": 131.881,
+      "p95LatencyMs": 161.205,
+      "throughputPerSecond": 123.067,
+      "integrity": "verified"
+    },
+    {
+      "name": "concurrent grade updates",
+      "concurrency": 20,
+      "successes": 20,
+      "failures": 0,
+      "retries": 190,
+      "averageLatencyMs": 104.388,
+      "p95LatencyMs": 167.699,
+      "throughputPerSecond": 115.21,
+      "integrity": "verified"
+    },
+    {
+      "name": "result publication consistency",
+      "concurrency": 20,
+      "successes": 1,
+      "failures": 19,
+      "retries": 19,
+      "averageLatencyMs": 18.909,
+      "p95LatencyMs": 19.747,
+      "throughputPerSecond": 1003.19,
+      "integrity": "verified"
+    }
+  ]
+}

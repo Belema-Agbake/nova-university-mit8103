@@ -1,0 +1,83 @@
+Project nova_university {
+  database_type: 'PostgreSQL'
+  Note: 'Matches prisma/schema.prisma and all applied migrations. The Prisma migration ledger is excluded.'
+}
+
+Enum UserRole { STUDENT LECTURER ADMINISTRATOR }
+Enum AccountVerificationStatus { UNCLAIMED PENDING_VERIFICATION ACTIVE REJECTED }
+Enum SemesterTerm { FIRST SECOND SUMMER }
+Enum RegistrationStatus { PENDING REGISTERED DROPPED }
+Enum ResultStatus { DRAFT SUBMITTED CHANGES_REQUESTED APPROVED PUBLISHED }
+Enum UploadStatus { UPLOADED VALIDATED REJECTED PROCESSED }
+Enum AuditAction { CREATED UPDATED SUBMITTED APPROVED PUBLISHED REOPENED }
+
+Table users {
+  id varchar [pk]
+  firebaseUid varchar [unique]
+  email varchar [unique, not null]
+  firstName varchar [not null]
+  lastName varchar [not null]
+  role UserRole [not null]
+  accountStatus AccountVerificationStatus [not null, default: 'UNCLAIMED']
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table account_claims {
+  id varchar [pk]
+  firebaseUid varchar [unique, not null]
+  requestedRole UserRole [not null]
+  officialUserId varchar [unique, not null, ref: > users.id]
+  suppliedId varchar [not null]
+  status AccountVerificationStatus [not null, default: 'PENDING_VERIFICATION']
+  decisionReason varchar
+  reviewedById varchar [ref: > users.id]
+  reviewedAt timestamp
+  createdAt timestamp [not null]
+}
+
+Table faculties { id varchar [pk] name varchar [unique, not null] code varchar [unique, not null] }
+Table departments { id varchar [pk] facultyId varchar [not null, ref: > faculties.id] name varchar [not null] code varchar [unique, not null] Indexes { (facultyId, name) [unique] } }
+Table programmes { id varchar [pk] departmentId varchar [not null, ref: > departments.id] name varchar [not null] code varchar [unique, not null] award varchar [not null] durationYears int [not null] Indexes { (departmentId, name) [unique] } }
+
+Table students {
+  id varchar [pk]
+  userId varchar [unique, not null, ref: > users.id]
+  matriculationNumber varchar [unique, not null]
+  programmeId varchar [not null, ref: > programmes.id]
+  entryYear int [not null]
+  officialLevel int [not null]
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table lecturers {
+  id varchar [pk]
+  userId varchar [unique, not null, ref: > users.id]
+  departmentId varchar [not null, ref: > departments.id]
+  staffNumber varchar [unique, not null]
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table academic_sessions { id varchar [pk] name varchar [unique, not null] startDate date [not null] endDate date [not null] }
+Table semesters { id varchar [pk] sessionId varchar [not null, ref: > academic_sessions.id] term SemesterTerm [not null] startDate date [not null] endDate date [not null] isCurrent boolean [not null, default: false] Indexes { (sessionId, term) [unique] } }
+Table courses { id varchar [pk] departmentId varchar [not null, ref: > departments.id] code varchar [unique, not null] title varchar [not null] creditUnits int [not null] level int [not null] }
+Table course_prerequisites { courseId varchar [not null, ref: > courses.id] prerequisiteCourseId varchar [not null, ref: > courses.id] Indexes { (courseId, prerequisiteCourseId) [pk] } }
+Table course_offerings { id varchar [pk] courseId varchar [not null, ref: > courses.id] semesterId varchar [not null, ref: > semesters.id] programmeId varchar [not null, ref: > programmes.id] capacity int [not null] Indexes { (courseId, semesterId, programmeId) [unique] } }
+Table lecturer_assignments { id varchar [pk] lecturerId varchar [not null, ref: > lecturers.id] courseOfferingId varchar [not null, ref: > course_offerings.id] isLead boolean [not null, default: false] Indexes { (lecturerId, courseOfferingId) [unique] } }
+Table class_schedules { id varchar [pk] courseOfferingId varchar [not null, ref: > course_offerings.id] weekday int [not null] startTime time [not null] endTime time [not null] room varchar [not null] }
+Table registration_periods { id varchar [pk] semesterId varchar [not null, ref: > semesters.id] opensAt timestamp [not null] closesAt timestamp [not null] isActive boolean [not null, default: true] }
+Table programme_course_requirements { programmeId varchar [not null, ref: > programmes.id] courseId varchar [not null, ref: > courses.id] isRequired boolean [not null, default: true] recommendedSemester int Indexes { (programmeId, courseId) [pk] } }
+Table registrations { id varchar [pk] studentId varchar [not null, ref: > students.id] courseOfferingId varchar [not null, ref: > course_offerings.id] status RegistrationStatus [not null, default: 'REGISTERED'] registeredAt timestamp [not null] Indexes { (studentId, courseOfferingId) [unique] } }
+
+Table grading_policies { id varchar [pk] sessionId varchar [not null, ref: > academic_sessions.id] programmeId varchar [ref: > programmes.id] name varchar [not null] isDefault boolean [not null, default: false] Indexes { (sessionId, programmeId, name) [unique] } }
+Table grading_scale_entries { id varchar [pk] gradingPolicyId varchar [not null, ref: > grading_policies.id] grade varchar [not null] minimumScore decimal [not null] maximumScore decimal [not null] gradePoint decimal [not null] Indexes { (gradingPolicyId, grade) [unique] } }
+Table assessment_components { id varchar [pk] courseOfferingId varchar [not null, ref: > course_offerings.id] name varchar [not null] weightPercent decimal [not null] maximumScore decimal [not null] Indexes { (courseOfferingId, name) [unique] } }
+Table assessment_scores { id varchar [pk] registrationId varchar [not null, ref: > registrations.id] assessmentComponentId varchar [not null, ref: > assessment_components.id] score decimal [not null] recordedAt timestamp [not null] Indexes { (registrationId, assessmentComponentId) [unique] } }
+Table results { id varchar [pk] registrationId varchar [unique, not null, ref: > registrations.id] totalScore decimal letterGrade varchar gradePoint decimal status ResultStatus [not null, default: 'DRAFT'] submittedAt timestamp publishedAt timestamp }
+Table result_audit_history { id varchar [pk] resultId varchar [not null, ref: > results.id] actorId varchar [ref: > users.id] action AuditAction [not null] details jsonb createdAt timestamp [not null] }
+Table result_upload_batches { id varchar [pk] courseOfferingId varchar [not null, ref: > course_offerings.id] lecturerId varchar [not null, ref: > lecturers.id] originalFilename varchar [not null] status UploadStatus [not null, default: 'UPLOADED'] createdAt timestamp [not null] }
+Table result_upload_errors { id varchar [pk] batchId varchar [not null, ref: > result_upload_batches.id] rowNumber int [not null] field varchar message varchar [not null] rawValue varchar }
+Table academic_notifications { id varchar [pk] userId varchar [not null, ref: > users.id] title varchar [not null] message varchar [not null] isRead boolean [not null, default: false] createdAt timestamp [not null] }
+Table academic_settings { id varchar [pk] key varchar [unique, not null] value jsonb [not null] updatedAt timestamp [not null] }
